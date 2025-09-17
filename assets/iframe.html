@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@zendeskgarden/css-bedrock@8">
+  <style>
+    /* Estilos personalizados para que sea muy obvio */
+    body {
+      background-color: #e0f7fa; /* Un fondo celeste muy claro */
+      padding: 15px;
+      font-family: sans-serif;
+      border: 2px solid #009688;
+      border-radius: 5px;
+    }
+    h2 {
+      color: #00796b;
+      text-align: center;
+    }
+    p {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    strong {
+      color: #004d40;
+    }
+    span#ticket-subject, span#requester-email {
+      background-color: #ffffff;
+      padding: 3px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    .loading {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .error {
+      background-color: #ffebee;
+      color: #c62828;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .customer-data {
+      background-color: white;
+      border-radius: 4px;
+      padding: 10px;
+      margin-top: 15px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .customer-data h3 {
+      color: #00796b;
+      margin-top: 0;
+    }
+    .data-row {
+      display: flex;
+      margin-bottom: 5px;
+    }
+    .data-label {
+      font-weight: bold;
+      min-width: 40%;
+    }
+    .data-value {
+      flex-grow: 1;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #009688;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* Nuevos estilos para el botón de exportación */
+    .export-btn {
+      background-color: #00796b;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+    .export-btn:hover {
+      background-color: #00695c;
+    }
+    .export-container {
+      margin-top: 15px;
+      text-align: center;
+    }
+    .export-status {
+      margin-top: 8px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  
+  <h2>Información del Cliente</h2>
+  <hr>
+
+  <h4>Info del Ticket Actual</h4>
+  <p><strong>Asunto:</strong> <br><span id="ticket-subject">Cargando...</span></p>
+  <p><strong>Email Solicitante:</strong> <br><span id="requester-email">Cargando...</span></p>
+  
+  <!-- Añadir un indicador de estado de inicialización -->
+  <div id="init-status" style="background-color: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 4px;">
+    Esperando inicialización del cliente ZAF...
+  </div>
+
+  <!-- Sección para datos del cliente desde API externa -->
+  <div id="customer-info">
+    <h4>Datos Externos del Cliente</h4>
+    <div id="api-data-container">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>Cargando información del cliente...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sección para datos del ticket -->
+  <div id="ticket-info">
+    <!-- Aquí se mostrarán los datos adicionales del ticket -->
+  </div>
+  
+  <!-- Sección para la exportación de datos (se añadirá dinámicamente) -->
+  <div id="export-container"></div>
+
+  <script type="text/javascript" src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+
+  <script>
+    // Variable para mostrar el estado de la app
+    let appStatus = "";
+    
+    // Función para actualizar el estado (para diagnóstico)
+    function updateStatus(message) {
+      appStatus += message + "<br>";
+      const statusElement = document.getElementById('init-status');
+      if (statusElement) {
+        statusElement.innerHTML = appStatus;
+      }
+    }
+    
+    // Inicializamos con try-catch para capturar posibles errores
+    let client;
+    try {
+      updateStatus("Intentando inicializar ZAFClient...");
+      client = ZAFClient.init();
+      updateStatus("ZAFClient inicializado correctamente");
+    } catch (error) {
+      updateStatus("Error al inicializar ZAFClient: " + error.message);
+      console.error("Error al inicializar ZAFClient:", error);
+    }
+
+    // Cuando la aplicación se carga, ejecutamos esta función
+    if (client) {
+      updateStatus("Registrando evento 'app.registered'...");
+      client.on('app.registered', function() {
+        updateStatus("Evento 'app.registered' recibido");
+        // Obtener datos del ticket
+        getTicketData();
+      });
+    }
+
+    // Función para obtener datos del ticket
+    function getTicketData() {
+      updateStatus("Obteniendo datos del ticket...");
+      
+      try {
+        // Solicitamos solo propiedades disponibles del ticket
+        client.get([
+          'ticket.id',
+          'ticket.subject',
+          'ticket.description',
+          'ticket.status',
+          'ticket.priority',
+          'ticket.type',
+          'ticket.requester.name',
+          'ticket.requester.email',
+          'ticket.tags'
+        ]).then(function(data) {
+          updateStatus("Datos recibidos del ticket");
+          console.log("Datos del ticket:", data);
+          
+          // Actualizamos la interfaz con los datos obtenidos
+          document.getElementById('ticket-subject').innerText = data['ticket.subject'] || "No disponible";
+          document.getElementById('requester-email').innerText = data['ticket.requester.email'] || "No disponible";
+          
+          // Añadimos más datos del ticket a la interfaz
+          const ticketInfo = document.getElementById('ticket-info');
+          ticketInfo.innerHTML = `
+            <div class="customer-data">
+              <h3>Datos del Ticket #${data['ticket.id']}</h3>
+              
+              <div class="data-row">
+                <div class="data-label">Estado:</div>
+                <div class="data-value">${data['ticket.status'] || '-'}</div>
+              </div>
+              
+              <div class="data-row">
+                <div class="data-label">Prioridad:</div>
+                <div class="data-value">${data['ticket.priority'] || '-'}</div>
+              </div>
+              
+              <div class="data-row">
+                <div class="data-label">Tipo:</div>
+                <div class="data-value">${data['ticket.type'] || '-'}</div>
+              </div>
+              
+              <div class="data-row">
+                <div class="data-label">Solicitante:</div>
+                <div class="data-value">${data['ticket.requester.name'] || '-'}</div>
+              </div>
+              
+              <div class="data-row">
+                <div class="data-label">Etiquetas:</div>
+                <div class="data-value">${formatTags(data['ticket.tags'])}</div>
+              </div>
+            </div>
+          `;
+          
+          // Configurar el botón de exportación
+          setupExportButton();
+          
+          // Una vez que tenemos el email, consultamos la API externa
+          if (data['ticket.requester.email']) {
+            fetchExternalData(data['ticket.requester.email']);
+          } else {
+            updateStatus("No se pudo obtener el email del solicitante");
+            showError("No se pudo obtener el email del solicitante");
+          }
+        })
+        .catch(function(error) {
+          updateStatus("Error al obtener datos: " + error.message);
+          console.error("Error al obtener datos:", error);
+          showError("Error al cargar datos del ticket: " + error.message);
+        });
+      } catch (error) {
+        updateStatus("Excepción al solicitar datos: " + error.message);
+        console.error("Excepción al solicitar datos:", error);
+        showError("Excepción al solicitar datos del ticket: " + error.message);
+      }
+    }
+
+    // Función para formatear fechas
+    function formatDate(dateString) {
+      if (!dateString) return '-';
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    }
+
+    // Función para formatear etiquetas
+    function formatTags(tags) {
+      if (!tags || tags.length === 0) return '-';
+      return tags.map(tag => `<span style="background-color: #e0f2f1; padding: 2px 6px; border-radius: 3px; margin-right: 4px;">${tag}</span>`).join(' ');
+    }
+
+    // Función para consultar API externa con mejor manejo de errores
+    function fetchExternalData(email) {
+      updateStatus("Consultando API de mentira para correo: " + email);
+      
+      // Usar datos mock directamente para evitar problemas con la API externa
+
+      const mockData = {
+        id: 1,
+        name: "Cliente de ejemplo",
+        email: email,
+        phone: "555-1234",
+        subscription: "Premium",
+        lastPurchase: "2023-09-15"
+      };
+      displayCustomerData(mockData);
+    }
+
+    // Función para mostrar los datos del cliente en la interfaz
+    function displayCustomerData(data) {
+      const container = document.getElementById('api-data-container');
+      
+      // Si no hay datos o la respuesta está vacía
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        container.innerHTML = '<div class="error">No se encontraron datos para este cliente</div>';
+        return;
+      }
+
+      // Asumimos que 'data' es un objeto con la información del cliente
+      // O tomamos el primer elemento si es un array
+      const customerData = Array.isArray(data) ? data[0] : data;
+      
+      // Verificamos si los datos tienen el formato esperado
+      if (typeof customerData !== 'object' || customerData === null) {
+        container.innerHTML = '<div class="error">Formato de datos incorrecto</div>';
+        console.error("Formato de datos incorrecto:", customerData);
+        return;
+      }
+      
+      // Detectamos si es una respuesta de texto plano o string que necesita ser parseada
+      if (typeof customerData === 'string') {
+        try {
+          const parsedData = JSON.parse(customerData);
+          displayCustomerData(parsedData); // Llamada recursiva con datos parseados
+          return;
+        } catch (e) {
+          console.warn("No se pudo parsear como JSON:", e);
+        }
+      }
+
+      // Si llegamos aquí y customerData no es un objeto con propiedades, mostramos error
+      if (Object.keys(customerData).length === 0) {
+        container.innerHTML = '<div class="error">No hay datos disponibles para mostrar</div>';
+        return;
+      }
+
+      // Construimos el HTML para mostrar los datos
+      let html = `
+        <div class="customer-data">
+          <h3>Información del Cliente</h3>
+      `;
+
+      // Verificamos qué tipo de datos tenemos y los mostramos apropiadamente
+      if (typeof customerData === 'object') {
+        // Filtramos propiedades no deseadas o con valores problemáticos
+        const validEntries = Object.entries(customerData).filter(([key, value]) => {
+          // Ignoramos propiedades internas, sensibles o que son funciones/símbolos
+          return !key.startsWith('_') && 
+                 !['password', 'token'].includes(key) && 
+                 typeof value !== 'function' && 
+                 typeof value !== 'symbol';
+        });
+
+        // Si después de filtrar no hay datos válidos
+        if (validEntries.length === 0) {
+          html += '<div class="data-row"><div class="data-value">No hay datos disponibles</div></div>';
+        } else {
+          // Iteramos sobre las propiedades válidas
+          for (const [key, value] of validEntries) {
+            // Formateamos el nombre de la propiedad
+            const formattedKey = key.replace(/([A-Z])/g, ' $1')
+                                   .replace(/^./, str => str.toUpperCase())
+                                   .replace(/_/g, ' ');
+            
+            html += `
+              <div class="data-row">
+                <div class="data-label">${formattedKey}:</div>
+                <div class="data-value">${formatValue(value)}</div>
+              </div>
+            `;
+          }
+        }
+      } else {
+        // Si no es un objeto, mostramos el valor directamente
+        html += `
+          <div class="data-row">
+            <div class="data-value">${formatValue(customerData)}</div>
+          </div>
+        `;
+      }
+      
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    // También mejora la función formatValue para manejar mejor los tipos de datos
+    function formatValue(value) {
+      if (value === null || value === undefined) return '-';
+      
+      if (typeof value === 'object') {
+        if (value instanceof Date) return value.toLocaleDateString();
+        
+        // Si es un array, intentamos mostrar cada elemento
+        if (Array.isArray(value)) {
+          if (value.length === 0) return '-';
+          
+          // Si el array tiene objetos complejos, los simplificamos
+          if (typeof value[0] === 'object' && value[0] !== null) {
+            return '<ul style="margin: 0; padding-left: 20px;">' + 
+              value.map(item => '<li>' + JSON.stringify(item) + '</li>').join('') + 
+              '</ul>';
+          }
+          
+          return value.join(', ');
+        }
+        
+        // Para objetos, intentamos un formato más amigable
+        try {
+          return JSON.stringify(value, null, 2)
+            .replace(/[{}"]/g, '')
+            .replace(/,\n/g, '<br>')
+            .replace(/:/g, ': ');
+        } catch {
+          return '[Objeto complejo]';
+        }
+      }
+      
+      if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+      
+      // Para strings, evitamos que se interpreten como HTML
+      if (typeof value === 'string') {
+        const div = document.createElement('div');
+        div.textContent = value;
+        return div.innerHTML;
+      }
+      
+      return String(value);
+    }
+
+    // Función para mostrar mensajes de error
+    function showError(message) {
+      const container = document.getElementById('api-data-container');
+      container.innerHTML = `<div class="error">${message}</div>`;
+    }
+    
+    // NUEVAS FUNCIONES PARA EXPORTACIÓN DE DATOS
+    
+    // Función para configurar el botón de exportación
+    function setupExportButton() {
+      const exportContainer = document.getElementById('export-container');
+      
+      // Crear botón de exportación
+      exportContainer.innerHTML = `
+        <div class="export-container">
+          <button id="export-json-btn" class="export-btn">
+            Exportar datos a JSON
+          </button>
+          <div id="export-status" class="export-status"></div>
+        </div>
+      `;
+      
+      // Agregar event listener al botón
+      document.getElementById('export-json-btn').addEventListener('click', exportTicketData);
+    }
+    
+    // Función para exportar los datos del ticket
+    function exportTicketData() {
+      const exportStatus = document.getElementById('export-status');
+      exportStatus.textContent = "Preparando datos...";
+      exportStatus.style.color = "#00796b";
+      
+      // Obtener solo los datos disponibles del ticket
+      client.get([
+        'ticket.id',
+        'ticket.subject',
+        'ticket.description',
+        'ticket.status',
+        'ticket.priority',
+        'ticket.type',
+        'ticket.requester.name',
+        'ticket.requester.email',
+        'ticket.tags'
+      ]).then(function(data) {
+        // Formatear los datos en un objeto limpio
+        const ticketData = {
+          id: data['ticket.id'],
+          subject: data['ticket.subject'],
+          description: data['ticket.description'],
+          status: data['ticket.status'],
+          priority: data['ticket.priority'],
+          type: data['ticket.type'],
+          requester: {
+            name: data['ticket.requester.name'],
+            email: data['ticket.requester.email']
+          },
+          tags: data['ticket.tags'],
+          exported_at: new Date().toISOString()
+        };
+        
+        // Convertir a JSON con formato legible
+        const jsonData = JSON.stringify(ticketData, null, 2);
+        
+        // Crear el nombre del archivo
+        const fileName = `ticket_${data['ticket.id']}_${new Date().toISOString().slice(0,10)}.json`;
+        
+        // Descargar el archivo JSON
+        downloadJSON(jsonData, fileName);
+        
+        exportStatus.textContent = "¡Exportación completada!";
+        exportStatus.style.color = "#00796b";
+        
+        // También mostrar los datos en la consola para verificación
+        console.log("Datos exportados:", ticketData);
+        
+        // Guardar en localStorage para referencia futura (opcional)
+        try {
+          localStorage.setItem(`ticket_${data['ticket.id']}_data`, jsonData);
+          console.log("Datos guardados en localStorage");
+        } catch (e) {
+          console.warn("No se pudo guardar en localStorage:", e);
+        }
+        
+      }).catch(function(error) {
+        console.error("Error al exportar datos:", error);
+        exportStatus.textContent = "Error al exportar datos: " + error.message;
+        exportStatus.style.color = "#c62828";
+      });
+    }
+    
+    // Función auxiliar para descargar el archivo JSON
+    function downloadJSON(content, fileName) {
+      const a = document.createElement('a');
+      const file = new Blob([content], {type: 'application/json'});
+      a.href = URL.createObjectURL(file);
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function() {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(a.href);
+      }, 0);
+    }
+  </script>
+</body>
+</html>
