@@ -230,3 +230,10 @@ span#ticket-subject, span#requester-email {
   font-size: 14px;
   border-top: 2px solid #e0e0e0;
 }
+.history-container {
+  background-color: white;
+  border-radius: 4px;
+  padding: 10px;
+  margin-top: 15px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}

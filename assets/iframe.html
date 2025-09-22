@@ -90,7 +90,7 @@
       ).join(' ');
     }
     
-    // Formatea diferentes tipos de valores para mostrar
+    // Formatear diferentes tipos de valores para mostrar
     function formatValue(value) {
       if (value === null || value === undefined) return '-';
       
@@ -263,11 +263,11 @@
       // Datos simulados con variación basada en el email
       const mockData = {
         id: uniqueId,
-        name: email.split('@')[0].replace(/\./g, ' ').replace(/\d+$/, ''),
-        email: email,
-        phone: `555-${1000 + (charCode % 9000)}`,
-        subscription: subscriptions[subscriptionIndex],
-        lastPurchase: "2023-09-15 (Ejemplo)",
+        Nombre: email.split('@')[0].replace(/\./g, ' ').replace(/\d+$/, ''),
+        Correo: email,
+        Teléfono: `555-${1000 + (charCode % 9000)}`,
+        Subscripción: subscriptions[subscriptionIndex],
+        ÚltimaCompra: "2023-09-15 (Ejemplo)",
       };
       
       // Simular un pequeño retraso como si fuera una API real
