@@ -7,7 +7,6 @@
 </head>
 
 <body>
-  
   <h2>Información del Cliente</h2>
   <hr>
 
@@ -15,12 +14,7 @@
   <p><strong>Asunto:</strong> <br><span id="ticket-subject">Cargando...</span></p>
   <p><strong>Email Solicitante:</strong> <br><span id="requester-email">Cargando...</span></p>
   
-  <!-- Añadir un indicador de estado de inicialización -->
-  <div id="init-status" style="background-color: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 4px;">
-    Esperando inicialización del cliente ZAF...
-  </div>
-
-  <!-- Sección para datos del cliente desde API externa -->
+  <!-- Datos del cliente desde API externa -->
   <div id="customer-info">
     <h4>Datos Externos del Cliente</h4>
     <div id="api-data-container">
@@ -31,12 +25,10 @@
     </div>
   </div>
 
-  <!-- Sección para datos del ticket -->
-  <div id="ticket-info">
-
-  </div>
+  <!-- Datos del ticket -->
+  <div id="ticket-info"></div>
   
-  <!-- Sección para tickets previos -->
+  <!-- Tickets previos -->
   <div id="ticket-history">
     <h4>Historial de Tickets</h4>
     <div id="history-container">
@@ -47,15 +39,34 @@
     </div>
   </div>
 
+  <!-- Contenedor para botón de exportar datos a JSON -->
   <div id="export-container"></div>
 
   <script type="text/javascript" src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
 
   <script>
-    // Variable para mostrar el estado de la app
+    // Constantes y variables globales
+    let client;
     let appStatus = "";
     
-    // Función para actualizar el estado (para diagnóstico)
+    // Campos del ticket a solicitar
+    const TICKET_FIELDS = [
+      'ticket.id',
+      'ticket.subject',
+      'ticket.description',
+      'ticket.status',
+      'ticket.priority',
+      'ticket.type',
+      'ticket.requester.name',
+      'ticket.requester.email',
+      'ticket.tags'
+    ];
+    
+    /**
+     * Funciones
+     */
+    
+    // Actualiza el estado mostrado
     function updateStatus(message) {
       appStatus += message + "<br>";
       const statusElement = document.getElementById('init-status');
@@ -64,310 +75,258 @@
       }
     }
     
-    // Inicializamos con try-catch para capturar posibles errores
-    let client;
-    try {
-      updateStatus("Intentando inicializar ZAFClient...");
-      client = ZAFClient.init();
-      updateStatus("ZAFClient inicializado correctamente");
-    } catch (error) {
-      updateStatus("Error al inicializar ZAFClient: " + error.message);
-      console.error("Error al inicializar ZAFClient:", error);
-    }
-
-    // Cuando la aplicación se carga, ejecutamos esta función
-    if (client) {
-      updateStatus("Registrando evento 'app.registered'...");
-      client.on('app.registered', function() {
-        updateStatus("Evento 'app.registered' recibido");
-        // Obtener datos del ticket
-        getTicketData();
-      });
-    }
-
-    // Función para obtener datos del ticket
-    function getTicketData() {
-      updateStatus("Obteniendo datos del ticket...");
-      
-      try {
-        // propiedades disponibles del ticket
-        client.get([
-          'ticket.id',
-          'ticket.subject',
-          'ticket.description',
-          'ticket.status',
-          'ticket.priority',
-          'ticket.type',
-          'ticket.requester.name',
-          'ticket.requester.email',
-          'ticket.tags'
-        ]).then(function(data) {
-          updateStatus("Datos recibidos del ticket");
-          console.log("Datos del ticket:", data);
-          
-          // Actualizar la interfaz con los datos obtenidos
-          document.getElementById('ticket-subject').innerText = data['ticket.subject'] || "No disponible";
-          document.getElementById('requester-email').innerText = data['ticket.requester.email'] || "No disponible";
-          
-          // Añadir más datos del ticket a la interfaz
-          const ticketInfo = document.getElementById('ticket-info');
-          ticketInfo.innerHTML = `
-            <div class="customer-data">
-              <h3>Datos del Ticket #${data['ticket.id']}</h3>
-              
-              <div class="data-row">
-                <div class="data-label">Estado:</div>
-                <div class="data-value">${data['ticket.status'] || '-'}</div>
-              </div>
-              
-              <div class="data-row">
-                <div class="data-label">Prioridad:</div>
-                <div class="data-value">${data['ticket.priority'] || '-'}</div>
-              </div>
-              
-              <div class="data-row">
-                <div class="data-label">Tipo:</div>
-                <div class="data-value">${data['ticket.type'] || '-'}</div>
-              </div>
-              
-              <div class="data-row">
-                <div class="data-label">Solicitante:</div>
-                <div class="data-value">${data['ticket.requester.name'] || '-'}</div>
-              </div>
-              
-              <div class="data-row">
-                <div class="data-label">Etiquetas:</div>
-                <div class="data-value">${formatTags(data['ticket.tags'])}</div>
-              </div>
-            </div>
-          `;
-          
-          // Configurar el botón de exportación
-          setupExportButton();
-          
-          // Obtener historial de tickets
-          getTicketHistory();
-          
-          // Una vez que tenemos el email, consultamos la API externa
-          if (data['ticket.requester.email']) {
-            fetchExternalData(data['ticket.requester.email']);
-          } else {
-            updateStatus("No se pudo obtener el email del solicitante");
-            showError("No se pudo obtener el email del solicitante");
-          }
-        })
-        .catch(function(error) {
-          updateStatus("Error al obtener datos: " + error.message);
-          console.error("Error al obtener datos:", error);
-          showError("Error al cargar datos del ticket: " + error.message);
-        });
-      } catch (error) {
-        updateStatus("Excepción al solicitar datos: " + error.message);
-        console.error("Excepción al solicitar datos:", error);
-        showError("Excepción al solicitar datos del ticket: " + error.message);
-      }
-    }
-
-    // Función para obtener y mostrar el historial de tickets
-    function getTicketHistory() {
-      updateStatus("Obteniendo historial de tickets...");
-      const historyContainer = document.getElementById('history-container');
-      
-      historyContainer.innerHTML = `
-        <div class="loading">
-          <div class="spinner"></div>
-          <p>Cargando historial de tickets...</p>
-        </div>
-      `;
-      
-      client.get('ticket.requester').then(function(data) {
-        const requesterId = data['ticket.requester'].id;
-        // Obtener tickets solicitados por el usuario, ordenados por fecha de creación descendente
-        return client.request(`/api/v2/users/${requesterId}/tickets/requested.json?sort_by=created_at&sort_order=desc`);
-      }).then(function(response) {
-        const tickets = response.tickets;
-        console.log('Tickets previos del solicitante:', tickets);
-        displayTicketHistory(tickets);
-      }).catch(function(error) {
-        console.error("Error al obtener historial de tickets:", error);
-        historyContainer.innerHTML = `
-          <div class="error">
-            Error al cargar el historial de tickets: ${error.message}
-          </div>
-        `;
-      });
-    }
-
-    // Función para mostrar el historial de tickets en la interfaz
-    function displayTicketHistory(tickets) {
-      const historyContainer = document.getElementById('history-container');
-      
-      if (!tickets || tickets.length === 0) {
-        historyContainer.innerHTML = `
-          <div style="padding: 10px; background-color: #e8f5e9; border-radius: 4px; text-align: center;">
-            Este es el primer ticket del solicitante
-          </div>
-        `;
-        return;
-      }
-      
-      // Obtener el ID del ticket actual
-      client.get('ticket.id').then(function(data) {
-        const currentTicketId = data['ticket.id'];
-        
-        // Filtrar el ticket actual del historial
-        const previousTickets = tickets.filter(ticket => ticket.id !== currentTicketId);
-        
-        if (previousTickets.length === 0) {
-          historyContainer.innerHTML = `
-            <div style="padding: 10px; background-color: #e8f5e9; border-radius: 4px; text-align: center;">
-              Este es el primer ticket del solicitante
-            </div>
-          `;
-          return;
-        }
-        
-        // Mostrar los tickets previos (máximo 5)
-        const displayTickets = previousTickets.slice(0, 5);
-        
-        let html = `
-          <div class="history-title">
-            <h4>Tickets previos</h4>
-            <span class="badge">${previousTickets.length} tickets</span>
-          </div>
-          <div class="customer-data">
-            <ul class="ticket-list">
-        `;
-        
-        displayTickets.forEach(ticket => {
-          // Formatear fecha
-          const createdDate = new Date(ticket.created_at);
-          const formattedDate = createdDate.toLocaleDateString();
-          
-          html += `
-            <li class="ticket-item">
-              <span class="ticket-id">#${ticket.id}</span>
-              <span class="ticket-subject" title="${ticket.subject}">${ticket.subject}</span>
-              <span class="ticket-status ${ticket.status}">${ticket.status}</span>
-            </li>
-          `;
-        });
-        
-        html += `
-            </ul>
-            ${previousTickets.length > 5 ? 
-              `<div style="text-align: center; margin-top: 10px; font-size: 12px; color: #757575;">
-                Mostrando 5 de ${previousTickets.length} tickets
-              </div>` : ''}
-          </div>
-        `;
-        
-        historyContainer.innerHTML = html;
-        
-        // Hacer que los tickets sean clickeables para navegar a ellos
-        const ticketItems = historyContainer.querySelectorAll('.ticket-item');
-        ticketItems.forEach((item, index) => {
-          item.style.cursor = 'pointer';
-          item.title = "Haz clic para ver este ticket";
-          item.addEventListener('click', function() {
-            const ticketId = displayTickets[index].id;
-            client.invoke('routeTo', 'ticket', ticketId);
-          });
-        });
-      });
-    }
-
-    // Función para formatear fechas
+    // Formatea fechas
     function formatDate(dateString) {
       if (!dateString) return '-';
       const date = new Date(dateString);
       return date.toLocaleString();
     }
 
-    // Función para formatear etiquetas
+    // Formatea etiquetas
     function formatTags(tags) {
       if (!tags || tags.length === 0) return '-';
-      return tags.map(tag => `<span style="background-color: #e0f2f1; padding: 2px 6px; border-radius: 3px; margin-right: 4px;">${tag}</span>`).join(' ');
+      return tags.map(tag => 
+        `<span style="background-color: #e0f2f1; padding: 2px 6px; border-radius: 3px; margin-right: 4px;">${tag}</span>`
+      ).join(' ');
     }
-
-    // Función para consultar API externa con mejor manejo de errores
-    function fetchExternalData(email) {
-      updateStatus("Consultando API de mentira para correo: " + email);
+    
+    // Formatea diferentes tipos de valores para mostrar
+    function formatValue(value) {
+      if (value === null || value === undefined) return '-';
       
-      // Usar datos mock directamente para evitar problemas con la API externa
-
-      const mockData = {
-        id: 1,
-        name: "Cliente de ejemplo",
-        email: email,
-        phone: "555-1234",
-        subscription: "Premium",
-        lastPurchase: "2023-09-15"
-      };
-      displayCustomerData(mockData);
+      if (typeof value === 'object') {
+        if (value instanceof Date) return value.toLocaleDateString();
+        
+        if (Array.isArray(value)) {
+          if (value.length === 0) return '-';
+          
+          if (typeof value[0] === 'object' && value[0] !== null) {
+            return '<ul style="margin: 0; padding-left: 20px;">' + 
+              value.map(item => '<li>' + JSON.stringify(item) + '</li>').join('') + 
+              '</ul>';
+          }
+          
+          return value.join(', ');
+        }
+        
+        try {
+          return JSON.stringify(value, null, 2)
+            .replace(/[{}"]/g, '')
+            .replace(/,\n/g, '<br>')
+            .replace(/:/g, ': ');
+        } catch {
+          return '[Objeto complejo]';
+        }
+      }
+      
+      if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+      
+      if (typeof value === 'string') {
+        const div = document.createElement('div');
+        div.textContent = value;
+        return div.innerHTML;
+      }
+      
+      return String(value);
     }
 
-    // Función para mostrar los datos del cliente en la interfaz
+    // Muestra mensajes de error
+    function showError(message, containerId = 'api-data-container') {
+      const container = document.getElementById(containerId);
+      container.innerHTML = `<div class="error">${message}</div>`;
+    }
+    
+    // Función para descargar archivo JSON
+    function downloadJSON(content, fileName) {
+      const a = document.createElement('a');
+      const file = new Blob([content], {type: 'application/json'});
+      a.href = URL.createObjectURL(file);
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(a.href);
+      }, 0);
+    }
+    
+    /**
+     * Funciones principales de la app
+     */
+    
+    // Inicializa la aplicación
+    function initApp() {
+      try {
+
+        client = ZAFClient.init();
+        client.on('app.registered', () => {
+          getTicketData();
+        });
+      } catch (error) {
+        console.error("Error al inicializar ZAFClient:", error);
+      }
+    }
+
+    // Obtiene datos del ticket actual
+    function getTicketData() {
+      
+      try {
+        client.get(TICKET_FIELDS)
+          .then(data => {
+            
+            // Actualiza la interfaz con los datos básicos
+            document.getElementById('ticket-subject').innerText = data['ticket.subject'] || "No disponible";
+            document.getElementById('requester-email').innerText = data['ticket.requester.email'] || "No disponible";
+            
+            // Muestra los datos detallados del ticket
+            renderTicketInfo(data);
+            
+            // Configura el botón de exportación
+            setupExportButton();
+            
+            // Obtiene historial de tickets del solicitante
+            getTicketHistory();
+            
+            // Obtiene datos externos del cliente
+            if (data['ticket.requester.email']) {
+              fetchExternalData(data['ticket.requester.email']);
+              // Añadir esta línea:
+              getCustomerPurchaseHistory(data['ticket.requester.email']);
+            } else {
+              ("No se pudo obtener el email del solicitante");
+              showError("No se pudo obtener el email del solicitante");
+            }
+          })
+          .catch(error => {
+            ("Error al obtener datos: " + error.message);
+            console.error("Error al obtener datos:", error);
+            showError("Error al cargar datos del ticket: " + error.message);
+          });
+      } catch (error) {
+        ("Excepción al solicitar datos: " + error.message);
+        console.error("Excepción al solicitar datos:", error);
+        showError("Excepción al solicitar datos del ticket: " + error.message);
+      }
+    }
+    
+    // Renderiza los datos del ticket en la interfaz
+    function renderTicketInfo(data) {
+      const ticketInfo = document.getElementById('ticket-info');
+      ticketInfo.innerHTML = `
+        <div class="customer-data">
+          <h3>Datos del Ticket #${data['ticket.id']}</h3>
+          
+          <div class="data-row">
+            <div class="data-label">Estado:</div>
+            <div class="data-value">${data['ticket.status'] || '-'}</div>
+          </div>
+          
+          <div class="data-row">
+            <div class="data-label">Prioridad:</div>
+            <div class="data-value">${data['ticket.priority'] || '-'}</div>
+          </div>
+          
+          <div class="data-row">
+            <div class="data-label">Tipo:</div>
+            <div class="data-value">${data['ticket.type'] || '-'}</div>
+          </div>
+          
+          <div class="data-row">
+            <div class="data-label">Solicitante:</div>
+            <div class="data-value">${data['ticket.requester.name'] || '-'}</div>
+          </div>
+          
+          <div class="data-row">
+            <div class="data-label">Etiquetas:</div>
+            <div class="data-value">${formatTags(data['ticket.tags'])}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Genera datos externos simulados del cliente
+    function fetchExternalData(email) {
+      ("Generando datos simulados para: " + email);
+      
+      // Extraer un identificador único del email (primera letra + longitud)
+      const firstLetter = email.charAt(0).toLowerCase();
+      const charCode = firstLetter.charCodeAt(0);
+      const emailLength = email.length;
+      
+      // Generar un ID único basado en el email
+      const uniqueId = charCode * 100 + emailLength;
+      
+      // Crear un conjunto de posibles suscripciones
+      const subscriptions = ['Basic', 'Standard', 'Premium', 'Enterprise', 'Trial'];
+      const subscriptionIndex = charCode % subscriptions.length;
+      
+      // Datos simulados con variación basada en el email
+      const mockData = {
+        id: uniqueId,
+        name: email.split('@')[0].replace(/\./g, ' ').replace(/\d+$/, ''),
+        email: email,
+        phone: `555-${1000 + (charCode % 9000)}`,
+        subscription: subscriptions[subscriptionIndex],
+        lastPurchase: "2023-09-15 (Ejemplo)",
+      };
+      
+      // Simular un pequeño retraso como si fuera una API real
+      setTimeout(() => {
+        displayCustomerData(mockData);
+      }, 300);
+    }
+
+    // Muestra los datos del cliente en la interfaz
     function displayCustomerData(data) {
       const container = document.getElementById('api-data-container');
       
-      // Si no hay datos o la respuesta está vacía
+      // Validaciones de datos
       if (!data || (Array.isArray(data) && data.length === 0)) {
         container.innerHTML = '<div class="error">No se encontraron datos para este cliente</div>';
         return;
       }
 
-      // Asumimos que 'data' es un objeto con la información del cliente
       const customerData = Array.isArray(data) ? data[0] : data;
       
-      // Verificamos si los datos tienen el formato esperado
       if (typeof customerData !== 'object' || customerData === null) {
         container.innerHTML = '<div class="error">Formato de datos incorrecto</div>';
         console.error("Formato de datos incorrecto:", customerData);
         return;
       }
       
-      // Detectamos si es una respuesta de texto plano o string que necesita ser parseada
       if (typeof customerData === 'string') {
         try {
           const parsedData = JSON.parse(customerData);
-          displayCustomerData(parsedData); // Llamada recursiva con datos parseados
+          displayCustomerData(parsedData);
           return;
         } catch (e) {
           console.warn("No se pudo parsear como JSON:", e);
         }
       }
 
-      // Si llegamos aquí y customerData no es un objeto con propiedades, mostramos error
       if (Object.keys(customerData).length === 0) {
         container.innerHTML = '<div class="error">No hay datos disponibles para mostrar</div>';
         return;
       }
 
-      // Construimos el HTML para mostrar los datos
+      // Construir HTML para mostrar datos
       let html = `
         <div class="customer-data">
           <h3>Información del Cliente</h3>
       `;
 
-      // Verificamos qué tipo de datos tenemos y los mostramos apropiadamente
       if (typeof customerData === 'object') {
-        // Filtramos propiedades no deseadas o con valores problemáticos
         const validEntries = Object.entries(customerData).filter(([key, value]) => {
-          // Ignoramos propiedades internas, sensibles o que son funciones/símbolos
           return !key.startsWith('_') && 
                  !['password', 'token'].includes(key) && 
                  typeof value !== 'function' && 
                  typeof value !== 'symbol';
         });
 
-        // Si después de filtrar no hay datos válidos
         if (validEntries.length === 0) {
           html += '<div class="data-row"><div class="data-value">No hay datos disponibles</div></div>';
         } else {
-          // Iteramos sobre las propiedades válidas
           for (const [key, value] of validEntries) {
-            // Formateamos el nombre de la propiedad
             const formattedKey = key.replace(/([A-Z])/g, ' $1')
                                    .replace(/^./, str => str.toUpperCase())
                                    .replace(/_/g, ' ');
@@ -381,7 +340,6 @@
           }
         }
       } else {
-        // Si no es un objeto, mostramos el valor directamente
         html += `
           <div class="data-row">
             <div class="data-value">${formatValue(customerData)}</div>
@@ -392,62 +350,116 @@
       html += '</div>';
       container.innerHTML = html;
     }
-
-    // función formatValue para manejar mejor los tipos de datos
-    function formatValue(value) {
-      if (value === null || value === undefined) return '-';
+    
+    // Obtiene historial de tickets del solicitante
+    function getTicketHistory() {
+      ("Obteniendo historial de tickets...");
+      const historyContainer = document.getElementById('history-container');
       
-      if (typeof value === 'object') {
-        if (value instanceof Date) return value.toLocaleDateString();
-        
-        // Si es un array, intentamos mostrar cada elemento
-        if (Array.isArray(value)) {
-          if (value.length === 0) return '-';
+      historyContainer.innerHTML = `
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Cargando historial de tickets...</p>
+        </div>
+      `;
+      
+      client.get('ticket.requester')
+        .then(data => {
+          const requesterId = data['ticket.requester'].id;
+          return client.request(`/api/v2/users/${requesterId}/tickets/requested.json?sort_by=created_at&sort_order=desc`);
+        })
+        .then(response => {
+          const tickets = response.tickets;
+          displayTicketHistory(tickets);
+        })
+        .catch(error => {
+          console.error("Error al obtener historial de tickets:", error);
+          historyContainer.innerHTML = `
+            <div class="error">
+              Error al cargar el historial de tickets: ${error.message}
+            </div>
+          `;
+        });
+    }
+
+    // Muestra el historial de tickets en la interfaz
+    function displayTicketHistory(tickets) {
+      const historyContainer = document.getElementById('history-container');
+      
+      // Si no hay tickets
+      if (!tickets || tickets.length === 0) {
+        historyContainer.innerHTML = `
+          <div style="padding: 10px; background-color: #e8f5e9; border-radius: 4px; text-align: center;">
+            Este es el primer ticket del solicitante
+          </div>
+        `;
+        return;
+      }
+      
+      // Obtener el ID del ticket actual para filtrarlo
+      client.get('ticket.id')
+        .then(data => {
+          const currentTicketId = data['ticket.id'];
+          const previousTickets = tickets.filter(ticket => ticket.id !== currentTicketId);
           
-          // Si el array tiene objetos complejos, los simplificamos
-          if (typeof value[0] === 'object' && value[0] !== null) {
-            return '<ul style="margin: 0; padding-left: 20px;">' + 
-              value.map(item => '<li>' + JSON.stringify(item) + '</li>').join('') + 
-              '</ul>';
+          if (previousTickets.length === 0) {
+            historyContainer.innerHTML = `
+              <div style="padding: 10px; background-color: #e8f5e9; border-radius: 4px; text-align: center;">
+                Este es el primer ticket del solicitante
+              </div>
+            `;
+            return;
           }
           
-          return value.join(', ');
-        }
-        
-        // Para objetos, intentamos un formato más amigable
-        try {
-          return JSON.stringify(value, null, 2)
-            .replace(/[{}"]/g, '')
-            .replace(/,\n/g, '<br>')
-            .replace(/:/g, ': ');
-        } catch {
-          return '[Objeto complejo]';
-        }
-      }
-      
-      if (typeof value === 'boolean') return value ? 'Sí' : 'No';
-      
-      // Para strings, evitamos que se interpreten como HTML
-      if (typeof value === 'string') {
-        const div = document.createElement('div');
-        div.textContent = value;
-        return div.innerHTML;
-      }
-      
-      return String(value);
-    }
-
-    // Función para mostrar mensajes de error
-    function showError(message) {
-      const container = document.getElementById('api-data-container');
-      container.innerHTML = `<div class="error">${message}</div>`;
+          const displayTickets = previousTickets.slice(0, 5);
+          
+          let html = `
+            <div class="history-title">
+              <h4>Tickets previos</h4>
+              <span class="badge">${previousTickets.length} tickets</span>
+            </div>
+            <div class="customer-data">
+              <ul class="ticket-list">
+          `;
+          
+          displayTickets.forEach(ticket => {
+            html += `
+              <li class="ticket-item">
+                <span class="ticket-id">#${ticket.id}</span>
+                <span class="ticket-subject" title="${ticket.subject}">${ticket.subject}</span>
+                <span class="ticket-status ${ticket.status}">${ticket.status}</span>
+              </li>
+            `;
+          });
+          
+          html += `
+              </ul>
+              ${previousTickets.length > 5 ? 
+                `<div style="text-align: center; margin-top: 10px; font-size: 12px; color: #757575;">
+                  Mostrando 5 de ${previousTickets.length} tickets
+                </div>` : ''}
+            </div>
+          `;
+          
+          historyContainer.innerHTML = html;
+          
+          // Hacer clickeables los tickets
+          const ticketItems = historyContainer.querySelectorAll('.ticket-item');
+          ticketItems.forEach((item, index) => {
+            item.style.cursor = 'pointer';
+            item.title = "Haz clic para ver este ticket";
+            item.addEventListener('click', () => {
+              const ticketId = displayTickets[index].id;
+              client.invoke('routeTo', 'ticket', ticketId);
+            });
+          });
+        });
     }
     
-    // Función para configurar el botón de exportación
+    // Configura el botón de exportación
     function setupExportButton() {
       const exportContainer = document.getElementById('export-container');
       
-      // Crear botón de exportación
       exportContainer.innerHTML = `
         <div class="export-container">
           <button id="export-json-btn" class="export-btn">
@@ -457,95 +469,178 @@
         </div>
       `;
       
-      // Agregar event listener al botón
       document.getElementById('export-json-btn').addEventListener('click', exportTicketData);
     }
     
-    // Función para exportar los datos del ticket
+    // Exporta los datos del ticket a un archivo JSON
     function exportTicketData() {
       const exportStatus = document.getElementById('export-status');
       exportStatus.textContent = "Preparando datos...";
       exportStatus.style.color = "#00796b";
       
-      // Obtener solo los datos disponibles del ticket
-      client.get([
-        'ticket.id',
-        'ticket.subject',
-        'ticket.description',
-        'ticket.status',
-        'ticket.priority',
-        'ticket.type',
-        'ticket.requester.name',
-        'ticket.requester.email',
-        'ticket.tags'
-      ]).then(function(data) {
-        // Formatear los datos en un objeto limpio
-        const ticketData = {
-          id: data['ticket.id'],
-          subject: data['ticket.subject'],
-          description: data['ticket.description'],
-          status: data['ticket.status'],
-          priority: data['ticket.priority'],
-          type: data['ticket.type'],
-          requester: {
-            name: data['ticket.requester.name'],
-            email: data['ticket.requester.email']
-          },
-          tags: data['ticket.tags'],
-          exported_at: new Date().toISOString()
-        };
+      client.get(TICKET_FIELDS)
+        .then(data => {
+          const ticketData = {
+            id: data['ticket.id'],
+            subject: data['ticket.subject'],
+            description: data['ticket.description'],
+            status: data['ticket.status'],
+            priority: data['ticket.priority'],
+            type: data['ticket.type'],
+            requester: {
+              name: data['ticket.requester.name'],
+              email: data['ticket.requester.email']
+            },
+            tags: data['ticket.tags'],
+            exported_at: new Date().toISOString()
+          };
+          
+          const jsonData = JSON.stringify(ticketData, null, 2);
+          const fileName = `ticket_${data['ticket.id']}_${new Date().toISOString().slice(0,10)}.json`;
+          
+          downloadJSON(jsonData, fileName);
+          
+          exportStatus.textContent = "¡Exportación completada!";
+          exportStatus.style.color = "#00796b";
+          
+          console.log("Datos exportados:", ticketData);
+          
+          try {
+            localStorage.setItem(`ticket_${data['ticket.id']}_data`, jsonData);
+            console.log("Datos guardados en localStorage");
+          } catch (e) {
+            console.warn("No se pudo guardar en localStorage:", e);
+          }
+        })
+        .catch(error => {
+          console.error("Error al exportar datos:", error);
+          exportStatus.textContent = "Error al exportar datos: " + error.message;
+          exportStatus.style.color = "#c62828";
+        });
+    }
+
+    // Función para obtener el historial de compras del cliente
+    function getCustomerPurchaseHistory(email) {
+      // Simular integración con sistema de punto de venta
+      const purchaseHistory = [
+        { date: '2025-08-15', product: 'Zapatillas Nike Air Jordan 1 Dark Mocha', amount: 144.990, storeId: 'STORE-342' },
+        { date: '2025-07-22', product: 'Camisa Polo', amount: 49.990, storeId: 'STORE-105' },
+        { date: '2025-07-01', product: 'Jeans', amount: 39.990, storeId: 'ONLINE' }
+      ];
+      
+      // Mostrar estos datos en la interfaz
+      displayPurchaseHistory(purchaseHistory);
+    }
+
+    // Función para mostrar el historial de compras en la interfaz
+    function displayPurchaseHistory(purchases) {
+      // Crear un contenedor para el historial de compras si no existe
+      let purchaseContainer = document.getElementById('purchase-history-container');
+      if (!purchaseContainer) {
+        // Si el contenedor no existe, crearlo y añadirlo al DOM
+        const customerInfo = document.getElementById('customer-info');
+        purchaseContainer = document.createElement('div');
+        purchaseContainer.id = 'purchase-history-container';
+        customerInfo.appendChild(purchaseContainer);
+      }
+      
+      // Crear el encabezado desplegable
+      let html = `
+        <div class="customer-data purchase-history-section">
+          <div class="expandable-header" id="purchase-history-header">
+            <span>Historial de Compras</span>
+            <span class="expand-icon">+</span>
+          </div>
+          <div class="expandable-content" id="purchase-history-content" style="display: none;">
+      `;
+      
+      // Si no hay compras o el array está vacío
+      if (!purchases || purchases.length === 0) {
+        html += `
+          <div style="padding: 10px; text-align: center;">
+            No hay compras registradas para este cliente
+          </div>
+        `;
+      } else {
+        // Construir la tabla HTML para mostrar las compras
+        html += `
+          <table class="purchase-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Monto</th>
+                <th>Tienda</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
         
-        // Convertir a JSON con formato legible
-        const jsonData = JSON.stringify(ticketData, null, 2);
+        // Añadir cada compra como una fila en la tabla
+        purchases.forEach(purchase => {
+          // Formatear la fecha
+          const formattedDate = new Date(purchase.date).toLocaleDateString();
+          
+          // Formatear el monto con separador de miles y decimales
+          const formattedAmount = new Intl.NumberFormat('es-CL', { 
+            style: 'currency', 
+            currency: 'CLP',
+            minimumFractionDigits: 0
+          }).format(purchase.amount);
+          
+          // Determinar el tipo de tienda
+          const storeType = purchase.storeId === 'ONLINE' ? 
+            '<span class="store-badge online">Online</span>' : 
+            `<span class="store-badge physical">Tienda ${purchase.storeId.replace('STORE-', '')}</span>`;
+          
+          html += `
+            <tr>
+              <td>${formattedDate}</td>
+              <td>${purchase.product}</td>
+              <td>${formattedAmount}</td>
+              <td>${storeType}</td>
+            </tr>
+          `;
+        });
         
-        // Crear el nombre del archivo
-        const fileName = `ticket_${data['ticket.id']}_${new Date().toISOString().slice(0,10)}.json`;
+        html += `
+            </tbody>
+          </table>
+          <div class="purchase-summary">
+            <strong>Total:</strong> ${new Intl.NumberFormat('es-CL', { 
+              style: 'currency', 
+              currency: 'CLP',
+              minimumFractionDigits: 0
+            }).format(purchases.reduce((sum, purchase) => sum + purchase.amount, 0))}
+          </div>
+        `;
+      }
+      
+      // Cerrar los divs
+      html += `
+          </div>
+        </div>
+      `;
+      
+      purchaseContainer.innerHTML = html;
+      
+      // Agregar evento para expandir/colapsar
+      document.getElementById('purchase-history-header').addEventListener('click', function() {
+        const content = document.getElementById('purchase-history-content');
+        const expandIcon = this.querySelector('.expand-icon');
         
-        // Descargar el archivo JSON
-        downloadJSON(jsonData, fileName);
-        
-        exportStatus.textContent = "¡Exportación completada!";
-        exportStatus.style.color = "#00796b";
-        
-        // También mostrar los datos en la consola para verificación
-        console.log("Datos exportados:", ticketData);
-        
-        // Guardar en localStorage para referencia futura
-        try {
-          localStorage.setItem(`ticket_${data['ticket.id']}_data`, jsonData);
-          console.log("Datos guardados en localStorage");
-        } catch (e) {
-          console.warn("No se pudo guardar en localStorage:", e);
+        if (content.style.display === 'none') {
+          content.style.display = 'block';
+          expandIcon.textContent = '-';
+        } else {
+          content.style.display = 'none';
+          expandIcon.textContent = '+';
         }
-        
-      }).catch(function(error) {
-        console.error("Error al exportar datos:", error);
-        exportStatus.textContent = "Error al exportar datos: " + error.message;
-        exportStatus.style.color = "#c62828";
       });
     }
-    
-    // Función auxiliar para descargar el archivo JSON
-    function downloadJSON(content, fileName) {
-      const a = document.createElement('a');
-      const file = new Blob([content], {type: 'application/json'});
-      a.href = URL.createObjectURL(file);
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(function() {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(a.href);
-      }, 0);
-    }
-    // Obtener y mostrar los tickets previos del solicitante
-    client.get('ticket.requester').then(function(data) {
-      const requesterId = data['ticket.requester'].id;
-      return client.request(`/api/v2/users/${requesterId}/tickets/requested.json`);
-    }).then(function(response) {
-      const tickets = response.tickets;
-      console.log('Tickets previos del solicitante:', tickets);
-    });
+
+    // Iniciar la aplicación
+    initApp();
   </script>
 </body>
 </html>
