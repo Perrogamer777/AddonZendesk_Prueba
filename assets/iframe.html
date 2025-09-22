@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@zendeskgarden/css-bedrock@8">
   <style>
-    /* Estilo */
     body {
       background-color: #e0f7fa; 
       padding: 15px;
@@ -98,6 +97,70 @@
       margin-top: 8px;
       font-size: 14px;
     }
+
+    /* Estilos para historial de tickets */
+    .ticket-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .ticket-item {
+      background-color: #f5f5f5;
+      border-radius: 4px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ticket-subject {
+      flex-grow: 1;
+      margin: 0 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ticket-id {
+      color: #00796b;
+      font-weight: bold;
+      min-width: 40px;
+    }
+    .ticket-status {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      color: white;
+      text-align: center;
+      min-width: 60px;
+    }
+    .ticket-status.open {
+      background-color: #4caf50;
+    }
+    .ticket-status.pending {
+      background-color: #ff9800;
+    }
+    .ticket-status.solved {
+      background-color: #2196f3;
+    }
+    .ticket-status.closed {
+      background-color: #9e9e9e;
+    }
+    .ticket-status.new {
+      background-color: #673ab7;
+    }
+    .history-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .badge {
+      background-color: #00796b;
+      color: white;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -130,6 +193,16 @@
 
   </div>
   
+  <!-- Sección para tickets previos -->
+  <div id="ticket-history">
+    <h4>Historial de Tickets</h4>
+    <div id="history-container">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>Cargando historial de tickets...</p>
+      </div>
+    </div>
+  </div>
 
   <div id="export-container"></div>
 
@@ -229,6 +302,9 @@
           // Configurar el botón de exportación
           setupExportButton();
           
+          // Obtener historial de tickets
+          getTicketHistory();
+          
           // Una vez que tenemos el email, consultamos la API externa
           if (data['ticket.requester.email']) {
             fetchExternalData(data['ticket.requester.email']);
@@ -247,6 +323,115 @@
         console.error("Excepción al solicitar datos:", error);
         showError("Excepción al solicitar datos del ticket: " + error.message);
       }
+    }
+
+    // Función para obtener y mostrar el historial de tickets
+    function getTicketHistory() {
+      updateStatus("Obteniendo historial de tickets...");
+      const historyContainer = document.getElementById('history-container');
+      
+      historyContainer.innerHTML = `
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Cargando historial de tickets...</p>
+        </div>
+      `;
+      
+      client.get('ticket.requester').then(function(data) {
+        const requesterId = data['ticket.requester'].id;
+        // Obtener tickets solicitados por el usuario, ordenados por fecha de creación descendente
+        return client.request(`/api/v2/users/${requesterId}/tickets/requested.json?sort_by=created_at&sort_order=desc`);
+      }).then(function(response) {
+        const tickets = response.tickets;
+        console.log('Tickets previos del solicitante:', tickets);
+        displayTicketHistory(tickets);
+      }).catch(function(error) {
+        console.error("Error al obtener historial de tickets:", error);
+        historyContainer.innerHTML = `
+          <div class="error">
+            Error al cargar el historial de tickets: ${error.message}
+          </div>
+        `;
+      });
+    }
+
+    // Función para mostrar el historial de tickets en la interfaz
+    function displayTicketHistory(tickets) {
+      const historyContainer = document.getElementById('history-container');
+      
+      if (!tickets || tickets.length === 0) {
+        historyContainer.innerHTML = `
+          <div style="padding: 10px; background-color: #e8f5e9; border-radius: 4px; text-align: center;">
+            Este es el primer ticket del solicitante
+          </div>
+        `;
+        return;
+      }
+      
+      // Obtener el ID del ticket actual
+      client.get('ticket.id').then(function(data) {
+        const currentTicketId = data['ticket.id'];
+        
+        // Filtrar el ticket actual del historial
+        const previousTickets = tickets.filter(ticket => ticket.id !== currentTicketId);
+        
+        if (previousTickets.length === 0) {
+          historyContainer.innerHTML = `
+            <div style="padding: 10px; background-color: #e8f5e9; border-radius: 4px; text-align: center;">
+              Este es el primer ticket del solicitante
+            </div>
+          `;
+          return;
+        }
+        
+        // Mostrar los tickets previos (máximo 5)
+        const displayTickets = previousTickets.slice(0, 5);
+        
+        let html = `
+          <div class="history-title">
+            <h4>Tickets previos</h4>
+            <span class="badge">${previousTickets.length} tickets</span>
+          </div>
+          <div class="customer-data">
+            <ul class="ticket-list">
+        `;
+        
+        displayTickets.forEach(ticket => {
+          // Formatear fecha
+          const createdDate = new Date(ticket.created_at);
+          const formattedDate = createdDate.toLocaleDateString();
+          
+          html += `
+            <li class="ticket-item">
+              <span class="ticket-id">#${ticket.id}</span>
+              <span class="ticket-subject" title="${ticket.subject}">${ticket.subject}</span>
+              <span class="ticket-status ${ticket.status}">${ticket.status}</span>
+            </li>
+          `;
+        });
+        
+        html += `
+            </ul>
+            ${previousTickets.length > 5 ? 
+              `<div style="text-align: center; margin-top: 10px; font-size: 12px; color: #757575;">
+                Mostrando 5 de ${previousTickets.length} tickets
+              </div>` : ''}
+          </div>
+        `;
+        
+        historyContainer.innerHTML = html;
+        
+        // Hacer que los tickets sean clickeables para navegar a ellos
+        const ticketItems = historyContainer.querySelectorAll('.ticket-item');
+        ticketItems.forEach((item, index) => {
+          item.style.cursor = 'pointer';
+          item.title = "Haz clic para ver este ticket";
+          item.addEventListener('click', function() {
+            const ticketId = displayTickets[index].id;
+            client.invoke('routeTo', 'ticket', ticketId);
+          });
+        });
+      });
     }
 
     // Función para formatear fechas
