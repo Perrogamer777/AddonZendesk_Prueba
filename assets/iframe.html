@@ -174,7 +174,7 @@
       updateStatus("Obteniendo datos del ticket...");
       
       try {
-        // Solicitamos solo propiedades disponibles del ticket
+        // propiedades disponibles del ticket
         client.get([
           'ticket.id',
           'ticket.subject',
@@ -189,11 +189,11 @@
           updateStatus("Datos recibidos del ticket");
           console.log("Datos del ticket:", data);
           
-          // Actualizamos la interfaz con los datos obtenidos
+          // Actualizar la interfaz con los datos obtenidos
           document.getElementById('ticket-subject').innerText = data['ticket.subject'] || "No disponible";
           document.getElementById('requester-email').innerText = data['ticket.requester.email'] || "No disponible";
           
-          // Añadimos más datos del ticket a la interfaz
+          // Añadir más datos del ticket a la interfaz
           const ticketInfo = document.getElementById('ticket-info');
           ticketInfo.innerHTML = `
             <div class="customer-data">
@@ -482,7 +482,7 @@
         // También mostrar los datos en la consola para verificación
         console.log("Datos exportados:", ticketData);
         
-        // Guardar en localStorage para referencia futura (opcional)
+        // Guardar en localStorage para referencia futura
         try {
           localStorage.setItem(`ticket_${data['ticket.id']}_data`, jsonData);
           console.log("Datos guardados en localStorage");
@@ -510,6 +510,14 @@
         window.URL.revokeObjectURL(a.href);
       }, 0);
     }
+    // Obtener y mostrar los tickets previos del solicitante
+    client.get('ticket.requester').then(function(data) {
+      const requesterId = data['ticket.requester'].id;
+      return client.request(`/api/v2/users/${requesterId}/tickets/requested.json`);
+    }).then(function(response) {
+      const tickets = response.tickets;
+      console.log('Tickets previos del solicitante:', tickets);
+    });
   </script>
 </body>
 </html>
