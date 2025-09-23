@@ -1,8 +1,8 @@
 {
   "app": {
     "name": "PruebaAddon",
-    "short_description": "Visualiza información completa del cliente desde sistemas externos.",
-    "long_description": "Esta aplicación permite a los agentes acceder a información crítica del cliente almacenada en sistemas externos, directamente desde la interfaz de Zendesk. Proporciona una vista de 360 grados del cliente para mejorar la eficiencia y calidad del soporte.",
-    "installation_instructions": "Instale la aplicación y configure la URL de la API externa en los parámetros."
+    "short_description": "Visualiza info del cliente.",
+    "long_description": "Permite ver información externa del cliente desde la interfaz de Zendesk.",
+    "installation_instructions": "Hola"
   }
 }
