@@ -62,10 +62,6 @@
       'ticket.tags'
     ];
     
-    /**
-     * Funciones
-     */
-    
     // Actualiza el estado mostrado
     function updateStatus(message) {
       appStatus += message + "<br>";
@@ -150,9 +146,7 @@
       }, 0);
     }
     
-    /**
-     * Funciones principales de la app
-     */
+    //Funciones principales 
     
     // Inicializa la aplicación
     function initApp() {
@@ -263,14 +257,8 @@
         Correo: email,
         Teléfono: `555-${1000 + (charCode % 9000)}`,
         ÚltimaCompra: "2023-09-15 (Ejemplo)",
-      };
-      
-      // Simular un pequeño retraso como si fuera una API real
-      setTimeout(() => {
-        displayCustomerData(mockData);
-      }, 300);
-    }
-
+      };;
+  }
     // Muestra los datos del cliente en la interfaz
     function displayCustomerData(data) {
       const container = document.getElementById('api-data-container');
