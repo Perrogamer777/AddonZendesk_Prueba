@@ -506,19 +506,114 @@
         });
     }
 
-    // Función para obtener el historial de compras del cliente
-    function getCustomerPurchaseHistory(email) {
-      // Simular integración con sistema de punto de venta
-      const purchaseHistory = [
-        { date: '2025-08-15', product: 'Zapatillas Nike Air Jordan 1 Dark Mocha', amount: 144.990, storeId: 'STORE-342' },
-        { date: '2025-07-22', product: 'Camisa Polo', amount: 49.990, storeId: 'STORE-105' },
-        { date: '2025-07-01', product: 'Jeans', amount: 39.990, storeId: 'ONLINE' }
-      ];
-      
-      // Mostrar estos datos en la interfaz
-      displayPurchaseHistory(purchaseHistory);
+    // Función para obtener el historial de compras del cliente con productos personalizados
+    async function getCustomerPurchaseHistory(email) {
+      try {
+        
+        // Generar compras basadas en el email del cliente
+        const customerProductIds = generateCustomerProductIds(email);
+        
+        const purchaseHistory = await Promise.all(
+          customerProductIds.map(async (productInfo, index) => {
+            let product;
+            try {
+              product = await getProductData(productInfo.id);
+            } catch (error) {
+              console.error(`Error obteniendo datos del producto ID ${productInfo.id}:`, error);
+              product = { name: `Producto Desconocido (ID ${productInfo.id})`, price: 0 };
+            }
+            return {
+              date: productInfo.date,
+              product: product.name,
+              amount: product.price * productInfo.quantity,
+              storeId: productInfo.storeId,
+            };
+          })
+        );
+        
+        displayPurchaseHistory(purchaseHistory);
+      } catch (error) {
+        console.error('Error obteniendo historial de compras:', error);
+        
+        // Mostrar error en la interfaz
+        const purchaseContainer = document.getElementById('purchase-history-container') || 
+                                 createPurchaseHistoryContainer();
+        
+        purchaseContainer.innerHTML = `
+          <div class="customer-data purchase-history-section">
+            <div class="expandable-header">
+              <span>Historial de Compras</span>
+              <span class="expand-icon">!</span>
+            </div>
+            <div class="error" style="display: block; padding: 15px;">
+              Error al cargar historial de compras desde la API: ${error.message}
+              <br><small>Verifique la conexión a internet y los permisos de la aplicación.</small>
+            </div>
+          </div>
+        `;
+      }
     }
 
+    // Función auxiliar para crear el contenedor si no existe
+    function createPurchaseHistoryContainer() {
+      const customerInfo = document.getElementById('customer-info');
+      const purchaseContainer = document.createElement('div');
+      purchaseContainer.id = 'purchase-history-container';
+      customerInfo.appendChild(purchaseContainer);
+      return purchaseContainer;
+    }
+    
+    function generateCustomerProductIds(email) {
+  // Crear un hash más complejo basado en el email completo
+  const emailHash = email.split('').reduce((hash, char, index) => {
+    const charCode = char.charCodeAt(0);
+    // Usar posición del caracter para más variabilidad
+    hash = ((hash << 5) - hash + charCode * (index + 1)) & 0x7fffffff;
+    return hash;
+  }, 0);
+  
+  // Generar semilla única por cliente
+  const seed = Math.abs(emailHash);
+  
+  // Función para generar números pseudo-aleatorios consistentes
+  function seededRandom(seed) {
+    const x = Math.sin(seed++) * 10000;
+    return x - Math.floor(x);
+  }
+  
+  // Generar fechas variables (últimos 3-6 meses)
+  const baseDate = new Date();
+  const purchases = [];
+  
+  // Cada cliente tendrá entre 2 y 5 compras
+  const numPurchases = 2 + Math.floor(seededRandom(seed) * 4);
+  
+  for (let i = 0; i < numPurchases; i++) {
+    // Generar ID de producto único para este cliente
+    const productId = 1 + Math.floor(seededRandom(seed + i * 100) * 20);
+    
+    // Generar fecha aleatoria (últimos 180 días)
+    const daysAgo = Math.floor(seededRandom(seed + i * 200) * 180);
+    const purchaseDate = new Date(baseDate - daysAgo * 24 * 60 * 60 * 1000);
+    
+    // Generar cantidad (1-3 items)
+    const quantity = 1 + Math.floor(seededRandom(seed + i * 300) * 3);
+    
+    // Generar tienda basada en el hash del email
+    const storeOptions = ['STORE-342', 'STORE-105', 'STORE-298', 'STORE-156', 'ONLINE'];
+    const storeIndex = Math.floor(seededRandom(seed + i * 400) * storeOptions.length);
+    
+    purchases.push({
+      id: productId,
+      date: purchaseDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
+      quantity: quantity,
+      storeId: storeOptions[storeIndex]
+    });
+  }
+  
+  // Ordenar por fecha (más reciente primero)
+  return purchases.sort((a, b) => new Date(b.date) - new Date(a.date));
+}
     // Función para mostrar el historial de compras en la interfaz
     function displayPurchaseHistory(purchases) {
       // Crear un contenedor para el historial de compras si no existe
@@ -556,6 +651,7 @@
               <tr>
                 <th>Fecha</th>
                 <th>Producto</th>
+
                 <th>Monto</th>
                 <th>Tienda</th>
               </tr>
@@ -565,17 +661,13 @@
         
         // Añadir cada compra como una fila en la tabla
         purchases.forEach(purchase => {
-          // Formatear la fecha
           const formattedDate = new Date(purchase.date).toLocaleDateString();
-          
-          // Formatear el monto con separador de miles y decimales
           const formattedAmount = new Intl.NumberFormat('es-CL', { 
             style: 'currency', 
             currency: 'CLP',
             minimumFractionDigits: 0
           }).format(purchase.amount);
           
-          // Determinar el tipo de tienda
           const storeType = purchase.storeId === 'ONLINE' ? 
             '<span class="store-badge online">Online</span>' : 
             `<span class="store-badge physical">Tienda ${purchase.storeId.replace('STORE-', '')}</span>`;
@@ -624,6 +716,29 @@
           expandIcon.textContent = '+';
         }
       });
+    }
+
+    // Función para obtener datos reales de productos desde Fake Store API
+    async function getProductData(productId) {
+      try {
+        const response = await fetch(`https://fakestoreapi.com/products/${productId}`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const product = await response.json();
+        
+        return {
+          name: product.title,
+          price: Math.round(product.price * 850), // Convertir USD a CLP aproximadamente
+          category: product.category,
+          description: product.description
+        };
+      } catch (error) {
+        console.error('Error fetching product:', error);
+        throw error; // Re-lanzar el error para que lo maneje la función que llama
+      }
     }
 
     // Iniciar la aplicación

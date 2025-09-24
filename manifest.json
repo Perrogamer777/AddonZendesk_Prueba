@@ -11,29 +11,16 @@
       "ticket_sidebar": {
         "url": "assets/iframe.html",
         "flexible": true,
-        "size":{"height":"700px","width":"400px"}
+        "size": {"height":"700px","width":"400px"}
       }
     }
   },
   "version": "1.0.0",
   "frameworkVersion": "2.0",
-  "parameters": [
-    {
-      "name": "apiUrl",
-      "type": "text",
-      "required": true,
-      "default": "https://jsonplaceholder.typicode.com/users"
-    }
-  ],
-  "requests": {
-    "fetchExternalData": {
-      "url": "{{setting.apiUrl}}",
-      "type": "GET",
-      "dataType": "json"
-    }
-  },
   "permissions": {
-    "external": ["*"]
+    "external": [
+      "https://fakestoreapi.com/*"
+    ]
   },
   "resizeToContent": "function resizeToContent() { const height = document.body.scrollHeight; client.invoke('resize', { height: height + 'px', width: '100%' }); } window.addEventListener('load', resizeToContent);",
   "assets": [
